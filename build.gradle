@@ -1,0 +1,71 @@
+plugins {
+    id "com.github.node-gradle.node" version "3.3.0"
+    id 'java'
+}
+
+repositories {
+    mavenCentral()
+    maven { url 'https://s01.oss.sonatype.org/content/repositories/releases' }
+    maven { url 'https://s01.oss.sonatype.org/content/repositories/snapshots/' }
+    maven { url 'https://repo.spring.io/milestone' }
+}
+
+ext {
+    springContext = '6.0.3'
+    pf4j = '3.8.0'
+    lombok = '1.18.24'
+    libFile = 'lib/api-0.4.3.jar'
+}
+
+
+
+dependencies {
+    compileOnly "org.springframework:spring-context:$springContext"
+    compileOnly "org.pf4j:pf4j:$pf4j"
+    compileOnly "io.projectreactor:reactor-core:3.5.1"
+    compileOnly "org.springframework:spring-webflux:6.0.3"
+    compileOnly "org.springdoc:springdoc-openapi-starter-webflux-api:2.0.2"
+
+    compileOnly files(libFile)
+    testRuntimeOnly files(libFile)
+
+    testRuntimeOnly "org.springframework:spring-context:$springContext"
+    testRuntimeOnly "org.pf4j:pf4j:$pf4j"
+    testRuntimeOnly "io.projectreactor:reactor-core:3.5.1"
+    testRuntimeOnly "org.springframework:spring-webflux:6.0.3"
+    testRuntimeOnly "org.springdoc:springdoc-openapi-starter-webflux-api:2.0.2"
+
+
+    // lombok
+    compileOnly "org.projectlombok:lombok:$lombok"
+    testCompileOnly "org.projectlombok:lombok:$lombok"
+    annotationProcessor "org.projectlombok:lombok:$lombok"
+
+    testImplementation 'org.junit.jupiter:junit-jupiter-api:5.8.1'
+    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.8.1'
+    testImplementation 'org.assertj:assertj-core:3.24.2'
+}
+
+test {
+    useJUnitPlatform()
+}
+
+node {
+    nodeProjectDir = file("${project.projectDir}/console")
+}
+
+task buildFrontend(type: NpxTask) {
+    command = 'pnpm'
+    args = ['build']
+}
+
+task pnpmInstall(type: NpxTask) {
+    command = "pnpm"
+    args = ["install"]
+}
+
+build {
+    // build frontend before build
+    tasks.getByName('compileJava').dependsOn('buildFrontend')
+    tasks.getByName("buildFrontend").dependsOn("pnpmInstall")
+}
