@@ -1,4 +1,4 @@
-package run.ikaros.plugin.starter;
+package run.ikaros.plugin.mikan;
 
 
 import lombok.extern.slf4j.Slf4j;
@@ -8,24 +8,25 @@ import run.ikaros.api.plugin.BasePlugin;
 
 @Slf4j
 @Component
-public class StarterPlugin extends BasePlugin {
+public class MikanPlugin extends BasePlugin {
+    public static final String NAME = "PluginMikan";
 
-    public StarterPlugin(PluginWrapper wrapper) {
+    public MikanPlugin(PluginWrapper wrapper) {
         super(wrapper);
     }
 
     @Override
     public void start() {
-        log.info("plugin [PluginStarter] start success");
+        log.info("plugin [{}] start success", NAME);
     }
 
     @Override
     public void stop() {
-        log.info("plugin [PluginStarter] stop success");
+        log.info("plugin [{}] stop success", NAME);
     }
 
     @Override
     public void delete() {
-        log.info("plugin [PluginStarter] delete success");
+        log.info("plugin [{}] delete success", NAME);
     }
 }

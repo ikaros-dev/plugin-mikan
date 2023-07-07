@@ -1,8 +1,8 @@
 # A unique name, must eq var console/vite.config.js#pluginEntryName,
 # and can not contain specific symbol such as - .
-name: PluginStarter
+name: PluginMikan
 # plugin entry class that extends BasePlugin
-clazz: run.ikaros.plugin.starter.StarterPlugin
+clazz: run.ikaros.plugin.mikan.MikanPlugin
 # plugin 'version' is a valid semantic version string (see semver.org).
 version: 0.1.0
 requires: ">=0.4.3"
@@ -10,7 +10,7 @@ author:
   name: Ikaros OSS Team
   website: https://github.com/ikaros-dev
 logo: https://ikaros.run/logo.png
-homepage: https://github.com/ikaros-dev/plugin-starter
-displayName: "插件快速开始模板"
-description: "这是一个插件快速开始模板"
+homepage: https://github.com/ikaros-dev/plugin-mikan
+displayName: "蜜柑计划插件"
+description: "方便通过蜜柑订阅自动追番"
 license: "AGPL-3.0"
