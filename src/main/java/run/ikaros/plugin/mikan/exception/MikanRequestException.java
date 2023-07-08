@@ -1,4 +1,4 @@
-package run.ikaros.plugin.mikan;
+package run.ikaros.plugin.mikan.exception;
 
 public class MikanRequestException extends RuntimeException {
     public MikanRequestException() {

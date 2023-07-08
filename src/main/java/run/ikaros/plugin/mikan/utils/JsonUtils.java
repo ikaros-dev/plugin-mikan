@@ -1,4 +1,4 @@
-package run.ikaros.plugin.mikan;
+package run.ikaros.plugin.mikan.utils;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.core.JsonProcessingException;

@@ -1,6 +1,5 @@
 package run.ikaros.plugin.mikan.qbittorrent;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
@@ -19,7 +18,8 @@ import reactor.core.scheduler.Schedulers;
 import run.ikaros.api.core.setting.ConfigMap;
 import run.ikaros.api.custom.ReactiveCustomClient;
 import run.ikaros.api.exception.NotFoundException;
-import run.ikaros.plugin.mikan.JsonUtils;
+import run.ikaros.plugin.mikan.DefaultConst;
+import run.ikaros.plugin.mikan.utils.JsonUtils;
 import run.ikaros.plugin.mikan.MikanPlugin;
 import run.ikaros.plugin.mikan.qbittorrent.model.QbCategory;
 import run.ikaros.plugin.mikan.qbittorrent.model.QbConfig;
@@ -126,6 +126,7 @@ public class QbittorrentClient {
             });
     }
 
+    @Retryable
     public List<String> getCookieByLogin(String username, String password) {
         if (StringUtils.isBlank(username)) {
             username = DefaultConst.OPTION_QBITTORRENT_USERNAME;
@@ -171,6 +172,7 @@ public class QbittorrentClient {
         }
     }
 
+    @Retryable
     public String getApplicationVersion() {
         initQbittorrentCategory();
         ResponseEntity<String> responseEntity =
@@ -183,6 +185,7 @@ public class QbittorrentClient {
         return responseEntity.getBody();
     }
 
+    @Retryable
     public String getApiVersion() {
         initQbittorrentCategory();
         ResponseEntity<String> responseEntity
@@ -196,6 +199,7 @@ public class QbittorrentClient {
     }
 
 
+    @Retryable
     @SuppressWarnings("unchecked")
     public List<QbCategory> getAllCategories() {
         List<QbCategory> qbCategoryList = new ArrayList<>();
@@ -222,6 +226,7 @@ public class QbittorrentClient {
         return qbCategoryList;
     }
 
+    @Retryable
     public void addNewCategory(String category, String savePath) {
         Assert.hasText(category, "'category' must has text.");
         Assert.hasText(savePath, "'savePath' must has text.");
@@ -240,6 +245,7 @@ public class QbittorrentClient {
         restTemplate.exchange(url, HttpMethod.POST, httpEntity, Object.class);
     }
 
+    @Retryable
     public void editCategory(String category, String savePath) {
         Assert.hasText(category, "'category' must has text.");
         Assert.hasText(savePath, "'savePath' must has text.");
@@ -258,6 +264,7 @@ public class QbittorrentClient {
         restTemplate.exchange(url, HttpMethod.POST, httpEntity, Object.class);
     }
 
+    @Retryable
     public void removeCategories(List<String> categories) {
         Assert.hasText(category, "'category' must has text.");
         Assert.isTrue(!categories.isEmpty(), "'categories' must is empty.");
@@ -296,6 +303,7 @@ public class QbittorrentClient {
      *                                         开启的话，经常会出现丢失文件的错误，不建议开启
      * @link <a href="https://github.com/qbittorrent/qBittorrent/wiki/WebUI-API-(qBittorrent-4.1)#add-new-torrent">WebUI-API-(qBittorrent-4.1)#add-new-torrent</a>
      */
+    @Retryable
     public synchronized void addTorrentFromURLs(String src,
                                                 String savepath,
                                                 String category,
@@ -362,6 +370,7 @@ public class QbittorrentClient {
      * @link <a href="https://github.com/qbittorrent/qBittorrent/wiki/WebUI-API-(qBittorrent-4.1)#get-torrent-list">WebUI-API-(qBittorrent-4.1)#get-torrent-list</a>
      * @see QbTorrentInfoFilter
      */
+    @Retryable
     public List<QbTorrentInfo> getTorrentList(QbTorrentInfoFilter filter,
                                               String category, String tags,
                                               Integer limit, Integer offset,
@@ -422,6 +431,7 @@ public class QbittorrentClient {
      * @param newFileName The new file name(with postfix) to use for the file
      * @link <a href="https://github.com/qbittorrent/qBittorrent/wiki/WebUI-API-(qBittorrent-4.1)#rename-file">WebUI-API-(qBittorrent-4.1)#rename-file</a>
      */
+    @Retryable
     public void renameFile(String hash, String oldFileName,
                            String newFileName) {
         Assert.hasText(hash, "'hash' must has text.");
@@ -444,6 +454,7 @@ public class QbittorrentClient {
         restTemplate.exchange(url, HttpMethod.POST, httpEntity, Void.class);
     }
 
+    @Retryable
     public void resume( String hashes) {
         Assert.hasText(hashes, "'hashes' must has text.");
         final String url = getUrlPrefix() + API.TORRENTS_RESUME;
@@ -461,6 +472,7 @@ public class QbittorrentClient {
         restTemplate.exchange(url, HttpMethod.POST, httpEntity, Void.class);
     }
 
+    @Retryable
     public void pause(String hashes) {
         Assert.hasText(hashes, "'hashes' must has text.");
         final String url = getUrlPrefix() + API.TORRENTS_PAUSE;
@@ -478,6 +490,7 @@ public class QbittorrentClient {
         restTemplate.exchange(url, HttpMethod.POST, httpEntity, Void.class);
     }
 
+    @Retryable
     public void recheck(String hashes) {
         Assert.hasText(hashes, "'hashes' must has text.");
         final String url = getUrlPrefix() + API.TORRENTS_RECHECK;
@@ -495,6 +508,7 @@ public class QbittorrentClient {
         restTemplate.exchange(url, HttpMethod.POST, httpEntity, Void.class);
     }
 
+    @Retryable
     public void delete(String hashes, Boolean deleteFiles) {
         Assert.hasText(hashes, "'hashes' must has text.");
         final String url = getUrlPrefix() + API.TORRENTS_DELETE;
