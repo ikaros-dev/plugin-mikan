@@ -34,6 +34,7 @@ import java.nio.file.Files;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -43,10 +44,11 @@ import lombok.extern.slf4j.Slf4j;
 @Component
 public class MikanClient {
     private RestTemplate restTemplate = new RestTemplate();
-    private static final String BASE_URL = "https://mikanani.me";
+    private static final String BASE_URL = "https://mikanime.tv";
     private QbConfig config = new QbConfig();
     private final ReactiveCustomClient customClient;
     private Proxy proxy = null;
+    private final AtomicReference<Boolean> init = new AtomicReference<>(false);
 
     public MikanClient(ReactiveCustomClient customClient) {
         this.customClient = customClient;
@@ -58,6 +60,9 @@ public class MikanClient {
 
     @EventListener(ApplicationReadyEvent.class)
     public void init() throws Exception {
+        if(init.get()) {
+            return;
+        }
         customClient.findOne(ConfigMap.class, MikanPlugin.NAME)
             .onErrorResume(NotFoundException.class,
                 e -> {
@@ -87,6 +92,7 @@ public class MikanClient {
                     config.setQbPassword(qbPassword);
                     log.debug("update qbittorrent password");
                 }
+                init.set(true);
             });
     }
 

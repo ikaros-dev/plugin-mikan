@@ -29,6 +29,7 @@ public class MikanPlugin extends BasePlugin {
     public void start() {
         RuntimeMode pluginRuntimeMode = getWrapper().getRuntimeMode();
         mikanSubHandler.setPluginRuntimeMode(pluginRuntimeMode);
+        mikanSubHandler.init();
         parseMikanSubRssAndAddToQbittorrentDisposable =
             mikanSubHandler.startParseMikanSubRssAndAddToQbittorrent();
         importQbittorrentFilesAndAddSubjectDisposable =

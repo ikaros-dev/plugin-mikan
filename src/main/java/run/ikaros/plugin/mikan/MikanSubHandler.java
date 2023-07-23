@@ -3,16 +3,20 @@ package run.ikaros.plugin.mikan;
 import org.pf4j.RuntimeMode;
 import org.springframework.stereotype.Component;
 import org.springframework.util.Assert;
+import org.springframework.util.StringUtils;
 import reactor.core.Disposable;
 import reactor.core.publisher.Flux;
 import reactor.core.scheduler.Schedulers;
 import run.ikaros.api.core.file.FileOperate;
 import run.ikaros.api.core.file.Folder;
 import run.ikaros.api.core.file.FolderOperate;
+import run.ikaros.api.core.subject.EpisodeFileOperate;
+import run.ikaros.api.core.subject.Subject;
 import run.ikaros.api.core.subject.SubjectOperate;
 import run.ikaros.api.infra.properties.IkarosProperties;
 import run.ikaros.api.infra.utils.FileUtils;
 import run.ikaros.api.store.enums.FileType;
+import run.ikaros.api.store.enums.SubjectSyncPlatform;
 import run.ikaros.plugin.mikan.qbittorrent.QbTorrentInfoFilter;
 import run.ikaros.plugin.mikan.qbittorrent.QbittorrentClient;
 import run.ikaros.plugin.mikan.qbittorrent.model.QbTorrentInfo;
@@ -22,8 +26,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.time.Duration;
 import java.time.LocalDateTime;
-import java.util.List;
-import java.util.Objects;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicReference;
 import lombok.extern.slf4j.Slf4j;
 
@@ -38,17 +41,21 @@ public class MikanSubHandler {
     private final SubjectOperate subjectOperate;
     private final FileOperate fileOperate;
     private final FolderOperate folderOperate;
+    private final EpisodeFileOperate episodeFileOperate;
     private final IkarosProperties ikarosProperties;
     private RuntimeMode pluginRuntimeMode;
+    private Map<String, String> epTitleBgmTvSubjectIdMap = new HashMap<>();
 
     public MikanSubHandler(MikanClient mikanClient, QbittorrentClient qbittorrentClient,
                            SubjectOperate subjectOperate, FileOperate fileOperate,
-                           FolderOperate folderOperate, IkarosProperties ikarosProperties) {
+                           FolderOperate folderOperate, EpisodeFileOperate episodeFileOperate,
+                           IkarosProperties ikarosProperties) {
         this.mikanClient = mikanClient;
         this.qbittorrentClient = qbittorrentClient;
         this.subjectOperate = subjectOperate;
         this.fileOperate = fileOperate;
         this.folderOperate = folderOperate;
+        this.episodeFileOperate = episodeFileOperate;
         this.ikarosProperties = ikarosProperties;
     }
 
@@ -56,9 +63,11 @@ public class MikanSubHandler {
         this.pluginRuntimeMode = pluginRuntimeMode;
     }
 
-    private void init() {
+    public void init() {
         try {
-            qbittorrentClient.init(ikarosProperties.getWorkDir().toString());
+            qbittorrentClient.init();
+            qbittorrentClient.setBaseSavePath(ikarosProperties.getWorkDir()
+                .resolve("caches").toString());
             mikanClient.init();
         } catch (Exception e) {
             throw new RuntimeException(e);
@@ -66,7 +75,6 @@ public class MikanSubHandler {
     }
 
     public Disposable startParseMikanSubRssAndAddToQbittorrent() {
-        init();
         // 订阅链接30分钟解析一次，插件开发者模式下3分钟一次
         return Flux.interval(Duration.ofMinutes(Objects.nonNull(pluginRuntimeMode) &&
                 RuntimeMode.DEVELOPMENT.equals(pluginRuntimeMode) ? 3 : 30))
@@ -76,7 +84,6 @@ public class MikanSubHandler {
     }
 
     public Disposable startImportQbittorrentFilesAndAddSubject() {
-        init();
         // Qbittorrent 每5分钟查询一次，插件开发者模式下1分钟一次
         return Flux.interval(Duration.ofMinutes(Objects.nonNull(pluginRuntimeMode) &&
                 RuntimeMode.DEVELOPMENT.equals(pluginRuntimeMode) ? 1 : 5))
@@ -100,6 +107,31 @@ public class MikanSubHandler {
             qbittorrentClient.addTorrentFromUrl(mikanRssItem.getTorrentUrl(), mikanRssItemTitle);
             log.info("add to qbittorrent for torrent name: [{}] and torrent url: [{}].",
                 mikanRssItemTitle, mikanRssItem.getTorrentUrl());
+
+            // add subject map for torrentName
+            String animePageUrl =
+                mikanClient.getAnimePageUrlByEpisodePageUrl(mikanRssItem.getEpisodePageUrl());
+            String bgmTvSubjectPageUrl =
+                mikanClient.getBgmTvSubjectPageUrlByAnimePageUrl(animePageUrl);
+            if(StringUtils.hasText(bgmTvSubjectPageUrl)) {
+                int index = bgmTvSubjectPageUrl.lastIndexOf("/");
+                String bgmTvSubjectId = bgmTvSubjectPageUrl.substring(index + 1);
+                epTitleBgmTvSubjectIdMap.put(mikanRssItemTitle, bgmTvSubjectId);
+                try {
+                    Long.parseLong(bgmTvSubjectId);
+                    AtomicReference<Subject> subject = new AtomicReference<>();
+                    subjectOperate.syncByPlatform(null, SubjectSyncPlatform.BGM_TV, bgmTvSubjectId)
+                        .subscribe(subject::set);
+                    while (Objects.isNull(subject.get())) {
+                        Thread.sleep(10);
+                    }
+                } catch (NumberFormatException numberFormatException) {
+                    log.warn("sync subject[{}] fail, convert subject id to long num exception.",
+                        bgmTvSubjectId, numberFormatException);
+                } catch (Exception e) {
+                    log.warn("sync subject[{}] fail.", bgmTvSubjectId, e);
+                }
+            }
         }
         // 如果新添加的种子文件状态是缺失文件，则需要再恢复下
         qbittorrentClient.tryToResumeAllMissingFilesErroredTorrents();
@@ -135,9 +167,52 @@ public class MikanSubHandler {
             File torrentContentFile = new File(qbTorrentInfo.getContentPath());
             importFileByHardLinkRecursively(torrentContentFile, folderId);
 
+            String name = qbTorrentInfo.getName();
+            if (epTitleBgmTvSubjectIdMap.containsKey(name)) {
+                String bgmTvSubjectId = epTitleBgmTvSubjectIdMap.get(name);
+                AtomicReference<Subject> subject = new AtomicReference<>();
+                subjectOperate.syncByPlatform(null, SubjectSyncPlatform.BGM_TV, bgmTvSubjectId)
+                    .subscribe(subject::set);
+                while (Objects.isNull(subject.get())) {
+                    try {
+                        Thread.sleep(10);
+                    } catch (InterruptedException e) {
+                        throw new RuntimeException(e);
+                    }
+                }
+
+                AtomicReference<run.ikaros.api.core.file.File> file = new AtomicReference<>();
+                String fileName = torrentContentFile.getName();
+                String postfix = FileUtils.parseFilePostfix(fileName);
+                FileType fileType = FileUtils.parseTypeByPostfix(postfix);
+                fileOperate.findAllByNameLikeAndType(fileName, fileType)
+                    .subscribe(file::set);
+                while (Objects.isNull(file.get())) {
+                    try {
+                        Thread.sleep(10);
+                    } catch (InterruptedException e) {
+                        throw new RuntimeException(e);
+                    }
+                }
+
+                episodeFileOperate.batchMatching(subject.get().getId(),
+                        new Long[] {file.get().getId()})
+                    .doOnSuccess(unused -> log.debug("batch success for subject: [{}] and [{}].",
+                        getSubjectName(subject), file.get().getName()))
+                    .subscribe();
+            }
         }
         log.info("end import qbittorrent files that has download finished, size: {}.",
             downloadProcessFinishTorrentList.size());
+    }
+
+    private static String getSubjectName(AtomicReference<Subject> subject) {
+        Subject sub = subject.get();
+        String name = sub.getNameCn();
+        if(!StringUtils.hasText(name)) {
+            name = sub.getName();
+        }
+        return name;
     }
 
     private void importFileByHardLinkRecursively(File torrentContentFile, Long folderId) {
@@ -214,7 +289,8 @@ public class MikanSubHandler {
                     .setMd5(md5Hash)
                     .setUpdateTime(LocalDateTime.now())
                     .setType(fileType)
-                    .setUrl(FileUtils.path2url(importFilePath, ikarosProperties.getWorkDir().toString())))
+                    .setUrl(
+                        FileUtils.path2url(importFilePath, ikarosProperties.getWorkDir().toString())))
                 .map(file -> {
                     log.info("import torrent file success for {}.",
                         torrentContentFile.getName());
@@ -248,10 +324,9 @@ public class MikanSubHandler {
         }
     }
 
-//    private String addPrefixForQbittorrentDownloadPath(String torrentContentPath) {
-//        return ikarosProperties.getWorkDir().toString()
-//            + (torrentContentPath.startsWith(String.valueOf(File.separatorChar))
-//            ? torrentContentPath : (File.separatorChar + torrentContentPath));
+//    private void matchingSubjectEpisodeResource() {
+//        Set<String> bgmTvSubjectIds = bgmTvSubjectIdEpTitlesMap.keySet();
+//
 //    }
 
 

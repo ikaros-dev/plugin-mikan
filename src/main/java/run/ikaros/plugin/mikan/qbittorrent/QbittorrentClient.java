@@ -32,6 +32,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -47,6 +48,7 @@ public class QbittorrentClient {
     private QbConfig config = new QbConfig();
     private HttpHeaders httpHeaders = new HttpHeaders();
     private String baseSavePath;
+    private final AtomicReference<Boolean> init = new AtomicReference<>(false);
 
     private final ReactiveCustomClient customClient;
 
@@ -78,7 +80,10 @@ public class QbittorrentClient {
     }
 
     public void setBaseSavePath(String baseSavePath) {
-        this.baseSavePath = baseSavePath;
+        this.baseSavePath =
+            baseSavePath.endsWith("/")
+                ? baseSavePath.substring(0, baseSavePath.length() - 1)
+                : baseSavePath;
     }
 
     public void setConfig(QbConfig config) {
@@ -106,12 +111,10 @@ public class QbittorrentClient {
     }
 
     @EventListener(ApplicationReadyEvent.class)
-    public void init(String baseSavePath) throws Exception {
-        Assert.hasText(baseSavePath, "'baseSavePath' must has text.");
-        this.baseSavePath =
-            baseSavePath.endsWith("/")
-                ? baseSavePath.substring(0, baseSavePath.length() - 1)
-                : baseSavePath;
+    public void init() throws Exception {
+        if(init.get()) {
+            return;
+        }
         customClient.findOne(ConfigMap.class, MikanPlugin.NAME)
             .onErrorResume(NotFoundException.class,
                 e -> {
@@ -142,6 +145,7 @@ public class QbittorrentClient {
                     config.setQbPassword(qbPassword);
                     log.debug("update qbittorrent password");
                 }
+                init.set(true);
             });
     }
 

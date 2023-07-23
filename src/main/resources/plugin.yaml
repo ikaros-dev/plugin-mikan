@@ -5,7 +5,7 @@ name: PluginMikan
 clazz: run.ikaros.plugin.mikan.MikanPlugin
 # plugin 'version' is a valid semantic version string (see semver.org).
 version: 0.1.0
-requires: ">=0.4.4"
+requires: ">=0.4.6"
 author:
   name: Ikaros OSS Team
   website: https://github.com/ikaros-dev
@@ -14,3 +14,5 @@ homepage: https://github.com/ikaros-dev/plugin-mikan
 displayName: "蜜柑计划插件"
 description: "方便通过蜜柑订阅自动追番"
 license: "AGPL-3.0"
+dependencies:
+  PluginBgmTv: 0.4.0
