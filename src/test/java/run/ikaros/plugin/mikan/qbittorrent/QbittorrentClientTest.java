@@ -42,7 +42,7 @@ class QbittorrentClientTest {
         System.out.println(qbittorrentClient.getApplicationVersion());
     }
 
-     @Test
+    // @Test
     void testGetTorrents() {
         QbConfig config = new QbConfig();
         config.setQbUrlPrefix("http://192.168.2.229:50100/");
