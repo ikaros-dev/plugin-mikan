@@ -9,7 +9,7 @@
   name: 'qbUrlPrefix'
   value: '$qbUrlPrefix'
   label: 'Qb URL 前缀'
-  help: '您的 Qbittorrent 的Web控制台Url链接，如局域网没有开启验证可留空。'
+  help: '您的 Qbittorrent 的Web控制台Url链接。'
   validation: 'required'
 
 - $formkit: 'text'
@@ -17,11 +17,9 @@
   value: '$qbUsername'
   label: 'Qb用户名'
   help: '您的 Qbittorrent 的Web控制台Url的用户名，如局域网没有开启验证可留空。'
-  validation: 'required'
 
 - $formkit: 'text'
   name: 'qbPassword'
   value: '$qbPassword'
   label: 'Qb密码'
   help: '您的 Qbittorrent 的Web控制台Url的用户名密码，如局域网没有开启验证可留空。'
-  validation: 'required'

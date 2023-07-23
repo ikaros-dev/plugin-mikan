@@ -14,7 +14,7 @@ ext {
     springContext = '6.0.3'
     pf4j = '3.8.0'
     lombok = '1.18.24'
-    libFile = 'lib/api-0.4.4.jar'
+    libFile = 'lib/api-0.4.5.jar'
 }
 
 
@@ -31,7 +31,7 @@ dependencies {
 
 
     compileOnly files(libFile)
-    testRuntimeOnly files(libFile)
+    testImplementation files(libFile)
 
     testRuntimeOnly "org.springframework:spring-context:$springContext"
     testRuntimeOnly "org.pf4j:pf4j:$pf4j"
@@ -54,24 +54,4 @@ dependencies {
 
 test {
     useJUnitPlatform()
-}
-
-node {
-    nodeProjectDir = file("${project.projectDir}/console")
-}
-
-task buildFrontend(type: NpxTask) {
-    command = 'pnpm'
-    args = ['build']
-}
-
-task pnpmInstall(type: NpxTask) {
-    command = "pnpm"
-    args = ["install"]
-}
-
-build {
-    // build frontend before build
-    tasks.getByName('compileJava').dependsOn('buildFrontend')
-    tasks.getByName("buildFrontend").dependsOn("pnpmInstall")
 }

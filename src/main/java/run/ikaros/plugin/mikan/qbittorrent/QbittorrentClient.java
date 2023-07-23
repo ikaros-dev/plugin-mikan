@@ -25,6 +25,7 @@ import run.ikaros.plugin.mikan.qbittorrent.model.QbCategory;
 import run.ikaros.plugin.mikan.qbittorrent.model.QbConfig;
 import run.ikaros.plugin.mikan.qbittorrent.model.QbTorrentInfo;
 
+import java.io.File;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -41,10 +42,11 @@ import lombok.extern.slf4j.Slf4j;
 @Retryable
 public class QbittorrentClient {
     private String category = DefaultConst.OPTION_QBITTORRENT_CATEGORY;
-    private String categorySavePath = DefaultConst.OPTION_QBITTORRENT_CATEGORY_SAVE_PATH;
+    private String reactiveSavePath = DefaultConst.OPTION_QBITTORRENT_CATEGORY_SAVE_PATH;
     private final RestTemplate restTemplate = new RestTemplate();
     private QbConfig config = new QbConfig();
     private HttpHeaders httpHeaders = new HttpHeaders();
+    private String baseSavePath;
 
     private final ReactiveCustomClient customClient;
 
@@ -75,6 +77,17 @@ public class QbittorrentClient {
         return this;
     }
 
+    public void setBaseSavePath(String baseSavePath) {
+        this.baseSavePath = baseSavePath;
+    }
+
+    public void setConfig(QbConfig config) {
+        this.config = config;
+        String qbUrlPrefix = config.getQbUrlPrefix();
+        this.config.setQbUrlPrefix(qbUrlPrefix.endsWith("/") ?
+            qbUrlPrefix.substring(0, qbUrlPrefix.length() - 1) : qbUrlPrefix);
+    }
+
     @Async
     public synchronized void refreshHttpHeadersCookies() {
         if (StringUtils.isNotBlank(config.getQbUrlPrefix())
@@ -93,7 +106,12 @@ public class QbittorrentClient {
     }
 
     @EventListener(ApplicationReadyEvent.class)
-    public void init() throws Exception {
+    public void init(String baseSavePath) throws Exception {
+        Assert.hasText(baseSavePath, "'baseSavePath' must has text.");
+        this.baseSavePath =
+            baseSavePath.endsWith("/")
+                ? baseSavePath.substring(0, baseSavePath.length() - 1)
+                : baseSavePath;
         customClient.findOne(ConfigMap.class, MikanPlugin.NAME)
             .onErrorResume(NotFoundException.class,
                 e -> {
@@ -110,7 +128,8 @@ public class QbittorrentClient {
                 }
                 String qbUrlPrefix = map.get("qbUrlPrefix");
                 if (StringUtils.isNotBlank(qbUrlPrefix)) {
-                    config.setQbUrlPrefix(qbUrlPrefix);
+                    config.setQbUrlPrefix(qbUrlPrefix.endsWith("/") ?
+                        qbUrlPrefix.substring(0, qbUrlPrefix.length() - 1) : qbUrlPrefix);
                     log.debug("update qbittorrent url prefix: {}", qbUrlPrefix);
                 }
                 String qbUsername = map.get("qbUsername");
@@ -158,14 +177,18 @@ public class QbittorrentClient {
         return config.getQbUrlPrefix();
     }
 
+    public String getSavePath() {
+        return baseSavePath + reactiveSavePath;
+    }
+
     public void initQbittorrentCategory() {
         try {
             boolean exist = getAllCategories().stream()
                 .anyMatch(qbCategory -> qbCategory.getName().equalsIgnoreCase(category));
             if (!exist) {
-                addNewCategory(category, categorySavePath);
+                addNewCategory(category, getSavePath());
                 log.debug("add new qbittorrent category: {}, savePath: {}",
-                    category, categorySavePath);
+                    category, getSavePath());
             }
         } catch (Exception exception) {
             log.warn("operate fail for add qbittorrent category: {}", category, exception);
@@ -321,6 +344,12 @@ public class QbittorrentClient {
         List<String> cookies = this.httpHeaders.get(HttpHeaders.COOKIE);
         headers.put(HttpHeaders.COOKIE, cookies == null ? List.of() : cookies);
 
+        File savePathDir = new File(savepath);
+        if (!savePathDir.exists()) {
+            savePathDir.mkdirs();
+            log.debug("create qbittorrent torrent download path: {}", savepath);
+        }
+
         // This method can add torrents from server local file or from URLs.
         // http://, https://, magnet: and bc://bt/ links are supported.
         MultiValueMap<String, String> body = new LinkedMultiValueMap<>();
@@ -345,13 +374,13 @@ public class QbittorrentClient {
 
     public void addTorrentFromUrl(String url) {
         Assert.hasText(url, "'url' must has text.");
-        addTorrentFromURLs(url, categorySavePath, category, null, true,
+        addTorrentFromURLs(url, getSavePath(), category, null, false,
             false, false, false);
     }
 
     public void addTorrentFromUrl(String url, String newName) {
         Assert.hasText(url, "'url' must has text.");
-        addTorrentFromURLs(url, categorySavePath, category, newName, true,
+        addTorrentFromURLs(url, getSavePath(), category, newName, false,
             false, false, false);
     }
 
@@ -455,7 +484,7 @@ public class QbittorrentClient {
     }
 
     @Retryable
-    public void resume( String hashes) {
+    public void resume(String hashes) {
         Assert.hasText(hashes, "'hashes' must has text.");
         final String url = getUrlPrefix() + API.TORRENTS_RESUME;
 
