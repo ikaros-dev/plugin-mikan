@@ -291,12 +291,8 @@ public class MikanSubHandler {
                     .setType(fileType)
                     .setUrl(
                         FileUtils.path2url(importFilePath, ikarosProperties.getWorkDir().toString())))
-                .map(file -> {
-                    log.info("import torrent file success for {}.",
-                        torrentContentFile.getName());
-                    return file;
-                })
-                .subscribe();
+                .subscribe(file -> log.info("import torrent file success for {}.",
+                    torrentContentFile.getName()));
         } else {
             String name = torrentContentFile.getName();
             AtomicReference<Folder> folder = new AtomicReference<>();
