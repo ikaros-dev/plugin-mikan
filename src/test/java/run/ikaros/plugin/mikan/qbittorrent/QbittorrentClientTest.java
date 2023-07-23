@@ -42,10 +42,10 @@ class QbittorrentClientTest {
         System.out.println(qbittorrentClient.getApplicationVersion());
     }
 
-    // @Test
+     @Test
     void testGetTorrents() {
         QbConfig config = new QbConfig();
-        config.setQbUrlPrefix("http://localhost:50100/");
+        config.setQbUrlPrefix("http://192.168.2.229:50100/");
 
         QbittorrentClient qbittorrentClient = new QbittorrentClient(null);
         qbittorrentClient.setBaseSavePath("C:\\Users\\li-guohao\\Videos\\tests");
