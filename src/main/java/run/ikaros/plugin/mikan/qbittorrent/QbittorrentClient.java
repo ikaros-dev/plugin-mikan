@@ -18,6 +18,7 @@ import reactor.core.scheduler.Schedulers;
 import run.ikaros.api.core.setting.ConfigMap;
 import run.ikaros.api.custom.ReactiveCustomClient;
 import run.ikaros.api.exception.NotFoundException;
+import run.ikaros.api.plugin.event.PluginConfigMapUpdateEvent;
 import run.ikaros.plugin.mikan.DefaultConst;
 import run.ikaros.plugin.mikan.utils.JsonUtils;
 import run.ikaros.plugin.mikan.MikanPlugin;
@@ -28,10 +29,7 @@ import run.ikaros.plugin.mikan.qbittorrent.model.QbTorrentInfo;
 import java.io.File;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicReference;
 import lombok.extern.slf4j.Slf4j;
 
@@ -110,6 +108,40 @@ public class QbittorrentClient {
         }
     }
 
+    @EventListener(PluginConfigMapUpdateEvent.class)
+    public void updateConfig(PluginConfigMapUpdateEvent event) {
+        if(Objects.isNull(event) || Objects.isNull(event.getConfigMap())
+        || !MikanPlugin.NAME.equals(event.getConfigMap().getName())) {
+            return;
+        }
+        Map<String, String> map = event.getConfigMap().getData();
+        updateConfigByDataMap(map);
+    }
+
+    private void updateConfigByDataMap(Map<String, String> map) {
+        String mikanRss = map.get("mikanRss");
+        if (StringUtils.isNotBlank(mikanRss)) {
+            config.setMikanRss(mikanRss);
+            log.debug("update mikan rss: {}", mikanRss);
+        }
+        String qbUrlPrefix = map.get("qbUrlPrefix");
+        if (StringUtils.isNotBlank(qbUrlPrefix)) {
+            config.setQbUrlPrefix(qbUrlPrefix.endsWith("/") ?
+                qbUrlPrefix.substring(0, qbUrlPrefix.length() - 1) : qbUrlPrefix);
+            log.debug("update qbittorrent url prefix: {}", qbUrlPrefix);
+        }
+        String qbUsername = map.get("qbUsername");
+        if (StringUtils.isNotBlank(qbUsername)) {
+            config.setQbUsername(qbUsername);
+            log.debug("update qbittorrent username: {}", qbUsername);
+        }
+        String qbPassword = map.get("qbPassword");
+        if (StringUtils.isNotBlank(qbPassword)) {
+            config.setQbPassword(qbPassword);
+            log.debug("update qbittorrent password");
+        }
+    }
+
     @EventListener(ApplicationReadyEvent.class)
     public void init() throws Exception {
         if(init.get()) {
@@ -124,27 +156,7 @@ public class QbittorrentClient {
             .subscribeOn(Schedulers.boundedElastic())
             .subscribe(configMap -> {
                 Map<String, String> map = configMap.getData();
-                String mikanRss = map.get("mikanRss");
-                if (StringUtils.isNotBlank(mikanRss)) {
-                    config.setMikanRss(mikanRss);
-                    log.debug("update mikan rss: {}", mikanRss);
-                }
-                String qbUrlPrefix = map.get("qbUrlPrefix");
-                if (StringUtils.isNotBlank(qbUrlPrefix)) {
-                    config.setQbUrlPrefix(qbUrlPrefix.endsWith("/") ?
-                        qbUrlPrefix.substring(0, qbUrlPrefix.length() - 1) : qbUrlPrefix);
-                    log.debug("update qbittorrent url prefix: {}", qbUrlPrefix);
-                }
-                String qbUsername = map.get("qbUsername");
-                if (StringUtils.isNotBlank(qbUsername)) {
-                    config.setQbUsername(qbUsername);
-                    log.debug("update qbittorrent username: {}", qbUsername);
-                }
-                String qbPassword = map.get("qbPassword");
-                if (StringUtils.isNotBlank(qbPassword)) {
-                    config.setQbPassword(qbPassword);
-                    log.debug("update qbittorrent password");
-                }
+                updateConfigByDataMap(map);
                 init.set(true);
             });
     }
