@@ -220,6 +220,7 @@ public class MikanSubHandler {
     private Mono<File> importFileByHardLinkRecursively(File torrentFile,
                                                        Folder folder) {
         return Mono.just(torrentFile)
+            .filter(File::isFile)
             .flatMap(torrentContentFile -> {
                 String fileName = torrentContentFile.getName();
                 String postfix = FileUtils.parseFilePostfix(fileName);
