@@ -150,7 +150,7 @@ public class MikanSubHandler {
             .filter(files -> !files.isEmpty())
             .map(files -> files.get(0))
             .flatMap(file -> episodeFileOperate.batchMatching(subject.getId(),
-                    new Long[] {file.getId()})
+                    new Long[] {file.getId()}, true)
                 .doOnSuccess(
                     unused -> log.debug("batch success for subject: [{}] and [{}].",
                         getSubjectName(subject), file.getName()))

@@ -4,8 +4,8 @@ name: PluginMikan
 # plugin entry class that extends BasePlugin
 clazz: run.ikaros.plugin.mikan.MikanPlugin
 # plugin 'version' is a valid semantic version string (see semver.org).
-version: 0.1.5
-requires: ">=0.4.6"
+version: 0.2.0
+requires: ">=0.5.0"
 author:
   name: Ikaros OSS Team
   website: https://github.com/ikaros-dev
