@@ -580,4 +580,26 @@ public class QbittorrentClient {
             .forEach(qbTorrentInfo -> resume(qbTorrentInfo.getHash()));
     }
 
+    /**
+     * @see <a href="https://github.com/qbittorrent/qBittorrent/wiki/WebUI-API-(qBittorrent-4.1)#add-torrent-tags">WebUI-API-(qBittorrent-4.1)#add-torrent-tags</a>
+     */
+    public void addSingleTags(String hash, String tag) {
+        Assert.hasText(hash, "'hash' must has text.");
+        Assert.hasText(tag, "'tag' must has text.");
+        final String url = getUrlPrefix() + API.TORRENTS_ADD_TAGS;
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
+        headers.setAcceptCharset(List.of(StandardCharsets.UTF_8));
+        List<String> cookies = this.httpHeaders.get(HttpHeaders.COOKIE);
+        headers.put(HttpHeaders.COOKIE, cookies == null ? List.of() : cookies);
+
+        String body = "hashes=" + hash
+            + "&tags=" + tag;
+
+        HttpEntity<String> httpEntity = new HttpEntity<>(body, headers);
+
+        restTemplate.exchange(url, HttpMethod.POST, httpEntity, Void.class);
+    }
+
 }

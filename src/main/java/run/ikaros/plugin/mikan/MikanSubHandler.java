@@ -2,11 +2,12 @@ package run.ikaros.plugin.mikan;
 
 import org.pf4j.RuntimeMode;
 import org.springframework.stereotype.Component;
-import org.springframework.util.Assert;
 import org.springframework.util.StringUtils;
 import reactor.core.Disposable;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
+import run.ikaros.api.constant.AppConst;
 import run.ikaros.api.core.file.FileOperate;
 import run.ikaros.api.core.file.Folder;
 import run.ikaros.api.core.file.FolderOperate;
@@ -27,7 +28,6 @@ import java.nio.file.Files;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.*;
-import java.util.concurrent.atomic.AtomicReference;
 import lombok.extern.slf4j.Slf4j;
 
 import static run.ikaros.api.constant.FileConst.DEFAULT_FOLDER_ROOT_ID;
@@ -44,7 +44,6 @@ public class MikanSubHandler {
     private final EpisodeFileOperate episodeFileOperate;
     private final IkarosProperties ikarosProperties;
     private RuntimeMode pluginRuntimeMode;
-    private Map<String, String> epTitleBgmTvSubjectIdMap = new HashMap<>();
 
     public MikanSubHandler(MikanClient mikanClient, QbittorrentClient qbittorrentClient,
                            SubjectOperate subjectOperate, FileOperate fileOperate,
@@ -67,7 +66,7 @@ public class MikanSubHandler {
         try {
             qbittorrentClient.init();
             qbittorrentClient.setBaseSavePath(ikarosProperties.getWorkDir()
-                .resolve("caches").toString());
+                .resolve(AppConst.CACHE_DIR_NAME).toString());
             mikanClient.init();
         } catch (Exception e) {
             throw new RuntimeException(e);
@@ -78,7 +77,7 @@ public class MikanSubHandler {
         // 订阅链接30分钟解析一次，插件开发者模式下3分钟一次
         return Flux.interval(Duration.ofMinutes(Objects.nonNull(pluginRuntimeMode) &&
                 RuntimeMode.DEVELOPMENT.equals(pluginRuntimeMode) ? 3 : 30))
-            .doOnEach(tick -> parseMikanSubRssAndAddToQbittorrent())
+            .flatMap(tick -> parseMikanSubRssAndAddToQbittorrent())
             .subscribeOn(Schedulers.newSingle("ParseMikanSubRssAndAddToQbittorrent", true))
             .subscribe();
     }
@@ -87,243 +86,213 @@ public class MikanSubHandler {
         // Qbittorrent 每5分钟查询一次，插件开发者模式下1分钟一次
         return Flux.interval(Duration.ofMinutes(Objects.nonNull(pluginRuntimeMode) &&
                 RuntimeMode.DEVELOPMENT.equals(pluginRuntimeMode) ? 1 : 5))
-            .doOnEach(tick -> importQbittorrentFilesAndAddSubject())
+            .flatMap(tick -> importQbittorrentFilesAndAddSubject())
             .subscribeOn(Schedulers.newSingle("ImportQbittorrentFilesAndAddSubject", true))
             .subscribe();
     }
 
-    public void parseMikanSubRssAndAddToQbittorrent() {
-        log.info("starting parse mikan my subscribe rss url from mikan config map.");
-        List<MikanRssItem> mikanRssItemList = mikanClient.parseMikanMySubscribeRss();
-        log.info("parse mikan my subscribe rss url to mikan rss item list, size: {} ",
-            mikanRssItemList.size());
+    public Mono<Void> parseMikanSubRssAndAddToQbittorrent() {
+        return Mono.just(mikanClient)
+            .doOnNext(mc ->
+                log.info("starting parse mikan my subscribe rss url from mikan config map."))
+            .flatMapMany(mc -> Flux.fromStream(mc.parseMikanMySubscribeRss().stream()))
+            .doOnNext(mikanRssItem ->
+                log.info("start for each mikan rss item list for item title: {}",
+                    mikanRssItem.getTitle()))
+            .flatMap(mikanRssItem -> {
+                String mikanRssItemTitle = mikanRssItem.getTitle();
+                qbittorrentClient.addTorrentFromUrl(mikanRssItem.getTorrentUrl(),
+                    mikanRssItemTitle);
+                log.info("add to qbittorrent for torrent name: [{}] and torrent url: [{}].",
+                    mikanRssItemTitle, mikanRssItem.getTorrentUrl());
 
-        log.info("adding torrents to qbittorrent.");
-        for (MikanRssItem mikanRssItem : mikanRssItemList) {
-            String mikanRssItemTitle = mikanRssItem.getTitle();
-            log.info("start for each mikan rss item list for item title: {}",
-                mikanRssItemTitle);
-
-            qbittorrentClient.addTorrentFromUrl(mikanRssItem.getTorrentUrl(), mikanRssItemTitle);
-            log.info("add to qbittorrent for torrent name: [{}] and torrent url: [{}].",
-                mikanRssItemTitle, mikanRssItem.getTorrentUrl());
-
-            // add subject map for torrentName
-            String animePageUrl =
-                mikanClient.getAnimePageUrlByEpisodePageUrl(mikanRssItem.getEpisodePageUrl());
-            String bgmTvSubjectPageUrl =
-                mikanClient.getBgmTvSubjectPageUrlByAnimePageUrl(animePageUrl);
-            if(StringUtils.hasText(bgmTvSubjectPageUrl)) {
-                int index = bgmTvSubjectPageUrl.lastIndexOf("/");
-                String bgmTvSubjectId = bgmTvSubjectPageUrl.substring(index + 1);
-                epTitleBgmTvSubjectIdMap.put(mikanRssItemTitle, bgmTvSubjectId);
-                try {
-                    Long.parseLong(bgmTvSubjectId);
-                    AtomicReference<Subject> subject = new AtomicReference<>();
-                    subjectOperate.syncByPlatform(null, SubjectSyncPlatform.BGM_TV, bgmTvSubjectId)
-                        .subscribe(subject::set);
-                    while (Objects.isNull(subject.get())) {
-                        Thread.sleep(10);
+                QbTorrentInfo qbTorrentInfo = qbittorrentClient.getTorrentList(QbTorrentInfoFilter.ALL,
+                        qbittorrentClient.getCategory(), null, null, null, null)
+                    .stream().filter(torrentInfo -> mikanRssItemTitle.equals(torrentInfo.getName()))
+                    .findFirst().orElse(null);
+                String bgmTvSubjectId = Objects.isNull(qbTorrentInfo) ? "" : qbTorrentInfo.getTags();
+                if(!StringUtils.hasText(bgmTvSubjectId)) {
+                    // add subject map for torrentName
+                    String animePageUrl =
+                        mikanClient.getAnimePageUrlByEpisodePageUrl(mikanRssItem.getEpisodePageUrl());
+                    String bgmTvSubjectPageUrl =
+                        mikanClient.getBgmTvSubjectPageUrlByAnimePageUrl(animePageUrl);
+                    if (!StringUtils.hasText(bgmTvSubjectPageUrl)) {
+                        return Mono.empty();
                     }
-                } catch (NumberFormatException numberFormatException) {
-                    log.warn("sync subject[{}] fail, convert subject id to long num exception.",
-                        bgmTvSubjectId, numberFormatException);
-                } catch (Exception e) {
-                    log.warn("sync subject[{}] fail.", bgmTvSubjectId, e);
+                    int index = bgmTvSubjectPageUrl.lastIndexOf("/");
+                    bgmTvSubjectId = bgmTvSubjectPageUrl.substring(index + 1);
+                    if(Objects.nonNull(qbTorrentInfo) && StringUtils.hasText(qbTorrentInfo.getHash())) {
+                        qbittorrentClient.addSingleTags(qbTorrentInfo.getHash(), bgmTvSubjectId);
+                        log.debug("add tag for torrent: {}", mikanRssItemTitle);
+                    }
                 }
-            }
-        }
-        // 如果新添加的种子文件状态是缺失文件，则需要再恢复下
-        qbittorrentClient.tryToResumeAllMissingFilesErroredTorrents();
-        log.info("end add torrents to qbittorrent. size: {}", mikanRssItemList.size());
+                return subjectOperate.syncByPlatform(null, SubjectSyncPlatform.BGM_TV,
+                    bgmTvSubjectId);
+            })
+            .doOnError(throwable -> log.error("parse mikan sub rss item fail.", throwable))
+            .doOnComplete(() -> {
+                // 如果新添加的种子文件状态是缺失文件，则需要再恢复下
+                qbittorrentClient.tryToResumeAllMissingFilesErroredTorrents();
+                log.info("end parse mikan my subscribe rss url.");
+            })
+            .then();
     }
 
-    public void importQbittorrentFilesAndAddSubject() {
-        log.info("starting import qbittorrent files that has download finished...");
-        List<QbTorrentInfo> torrentList = qbittorrentClient.getTorrentList(QbTorrentInfoFilter.ALL,
-            qbittorrentClient.getCategory(), null, null, null, null);
+    private Mono<Subject> matchingSingleFile(Subject subject, String fileName) {
+        String postfix = FileUtils.parseFilePostfix(fileName);
+        FileType fileType = FileUtils.parseTypeByPostfix(postfix);
+        log.debug("matching: subject: [{}]%n "
+                + "fileName: [{}] postfix: [{}] fileType: [{}]" ,
+            getSubjectName(subject), fileName, postfix, fileType);
+        return fileOperate.findAllByNameLikeAndType(fileName, fileType)
+            .collectList()
+            .filter(files -> !files.isEmpty())
+            .map(files -> files.get(0))
+            .flatMap(file -> episodeFileOperate.batchMatching(subject.getId(),
+                    new Long[] {file.getId()})
+                .doOnSuccess(
+                    unused -> log.debug("batch success for subject: [{}] and [{}].",
+                        getSubjectName(subject), file.getName()))
+            ).then(Mono.just(subject));
+    }
 
-        List<QbTorrentInfo> downloadProcessFinishTorrentList
-            = torrentList.stream()
+    public Mono<Void> importQbittorrentFilesAndAddSubject() {
+        return Mono.just(qbittorrentClient)
+            .doOnNext(qc ->
+                log.info("starting import qbittorrent files that has download finished..."))
+            .flatMapMany(qc -> Flux.fromStream(qc.getTorrentList(QbTorrentInfoFilter.ALL,
+                qc.getCategory(), null, null, null, null).stream()))
             .filter(qbTorrentInfo -> qbTorrentInfo.getProgress() == 1.0)
-            .toList();
+            .doOnNext(qbTorrentInfo ->
+                log.info("start handle single torrent for content path: {}",
+                    qbTorrentInfo.getContentPath()))
+            .flatMap(qbTorrentInfo ->
+                folderOperate.findByParentIdAndName(DEFAULT_FOLDER_ROOT_ID,
+                        QBITTORRENT_IMPORT_FOLDER_NAME)
+                    .switchIfEmpty(folderOperate.create(DEFAULT_FOLDER_ROOT_ID,
+                        QBITTORRENT_IMPORT_FOLDER_NAME))
+                    .flatMap(folder -> Mono.just(qbTorrentInfo)
+                        .map(QbTorrentInfo::getContentPath)
+                        .map(File::new)
+                        .flatMap(file -> importFileByHardLinkRecursively(file, folder)))
+                    .then(Mono.just(qbTorrentInfo)))
 
-        for (QbTorrentInfo qbTorrentInfo : downloadProcessFinishTorrentList) {
-            AtomicReference<Folder> importFolder = new AtomicReference<>();
-            folderOperate.findByParentIdAndName(DEFAULT_FOLDER_ROOT_ID,
-                    QBITTORRENT_IMPORT_FOLDER_NAME)
-                .switchIfEmpty(folderOperate.create(DEFAULT_FOLDER_ROOT_ID,
-                    QBITTORRENT_IMPORT_FOLDER_NAME))
-                .subscribe(importFolder::set);
-            while (Objects.isNull(importFolder.get())) {
-                try {
-                    Thread.sleep(10);
-                } catch (InterruptedException e) {
-                    throw new RuntimeException(e);
-                }
-            }
-            Long folderId = importFolder.get().getId();
+            .flatMap(torrentInfo -> Mono.just(
+                    torrentInfo.getTags())
+                .filter(StringUtils::hasText)
+                .flatMap(bgmTvSubjectId -> subjectOperate.syncByPlatform(null,
+                        SubjectSyncPlatform.BGM_TV, bgmTvSubjectId)
+                    .flatMap(subject -> {
+                        String contentPath = torrentInfo.getContentPath();
+                        File torrentFile = new File(contentPath);
+                        if(torrentFile.isFile()) {
+                            String fileName = contentPath.substring(contentPath.lastIndexOf(File.separatorChar) + 1);
+                            return matchingSingleFile(subject, fileName);
+                        }
 
-            File torrentContentFile = new File(qbTorrentInfo.getContentPath());
-            importFileByHardLinkRecursively(torrentContentFile, folderId);
-
-            String name = qbTorrentInfo.getName();
-            if (epTitleBgmTvSubjectIdMap.containsKey(name)) {
-                String bgmTvSubjectId = epTitleBgmTvSubjectIdMap.get(name);
-                AtomicReference<Subject> subject = new AtomicReference<>();
-                subjectOperate.syncByPlatform(null, SubjectSyncPlatform.BGM_TV, bgmTvSubjectId)
-                    .subscribe(subject::set);
-                while (Objects.isNull(subject.get())) {
-                    try {
-                        Thread.sleep(10);
-                    } catch (InterruptedException e) {
-                        throw new RuntimeException(e);
-                    }
-                }
-
-                AtomicReference<run.ikaros.api.core.file.File> file = new AtomicReference<>();
-                String fileName = torrentContentFile.getName();
-                String postfix = FileUtils.parseFilePostfix(fileName);
-                FileType fileType = FileUtils.parseTypeByPostfix(postfix);
-                fileOperate.findAllByNameLikeAndType(fileName, fileType)
-                    .subscribe(file::set);
-                while (Objects.isNull(file.get())) {
-                    try {
-                        Thread.sleep(10);
-                    } catch (InterruptedException e) {
-                        throw new RuntimeException(e);
-                    }
-                }
-
-                episodeFileOperate.batchMatching(subject.get().getId(),
-                        new Long[] {file.get().getId()})
-                    .doOnSuccess(unused -> log.debug("batch success for subject: [{}] and [{}].",
-                        getSubjectName(subject), file.get().getName()))
-                    .subscribe();
-            }
-        }
-        log.info("end import qbittorrent files that has download finished, size: {}.",
-            downloadProcessFinishTorrentList.size());
+                        if(torrentFile.isDirectory()) {
+                            File[] files = torrentFile.listFiles();
+                            return Mono.justOrEmpty(files)
+                                .flatMapMany(files1 -> Flux.fromStream(Arrays.stream(files1)))
+                                .map(File::getName)
+                                .flatMap(fileName -> matchingSingleFile(subject, fileName))
+                                .then(Mono.just(subject));
+                        }
+                        return Mono.just(subject);
+                    })
+                )
+            )
+            .doOnError(throwable -> log.error("handle single torrent fail.", throwable))
+            .doOnComplete(
+                () -> log.info("end import qbittorrent files that has download finished."))
+            .then();
     }
 
-    private static String getSubjectName(AtomicReference<Subject> subject) {
-        Subject sub = subject.get();
-        String name = sub.getNameCn();
-        if(!StringUtils.hasText(name)) {
-            name = sub.getName();
+    private static String getSubjectName(Subject subject) {
+        String name = subject.getNameCn();
+        if (!StringUtils.hasText(name)) {
+            name = subject.getName();
         }
         return name;
     }
 
-    private void importFileByHardLinkRecursively(File torrentContentFile, Long folderId) {
-        Assert.notNull(torrentContentFile, "'torrentContentFile' must not null.");
-        Assert.isTrue(folderId > 0, "'torrentContentFile' must not null.");
-        if (torrentContentFile.isFile()) {
-            String fileName = torrentContentFile.getName();
-            String postfix = FileUtils.parseFilePostfix(fileName);
-            FileType fileType = FileUtils.parseTypeByPostfix(postfix);
-            AtomicReference<List<run.ikaros.api.core.file.File>> existsFiles =
-                new AtomicReference<>();
-            fileOperate.findAllByNameLikeAndType(fileName, fileType)
-                .collectList()
-                .subscribe(existsFiles::set);
-            while (Objects.isNull(existsFiles.get())) {
-                try {
-                    Thread.sleep(10);
-                } catch (InterruptedException e) {
-                    throw new RuntimeException(e);
-                }
-            }
-            if (existsFiles.get().size() > 0) {
-                return;
-            }
-
-            String md5Hash = "";
-            try {
-                md5Hash =
-                    FileUtils.calculateFileHash(
-                        FileUtils.convertToDataBufferFlux(torrentContentFile));
-            } catch (IOException e) {
-                log.error("calculate file md5 fail.", e);
-                return;
-            }
-
-            AtomicReference<Boolean> exists = new AtomicReference<>();
-            fileOperate.existsByMd5(md5Hash)
-                .subscribe(exists::set);
-            while (Objects.isNull(exists.get())) {
-                try {
-                    Thread.sleep(10);
-                } catch (InterruptedException e) {
-                    throw new RuntimeException(e);
-                }
-            }
-            if (Boolean.TRUE.equals(exists.get())) {
-                return;
-            }
-
-            String importFilePath =
-                FileUtils.buildAppUploadFilePath(ikarosProperties.getWorkDir().toString(), postfix);
-            File importFile = new File(importFilePath);
-            try {
-                Files.createLink(importFile.toPath(), torrentContentFile.toPath());
-                log.debug("hard link file success, target: [{}], exists: [{}].",
-                    importFilePath, torrentContentFile.getAbsolutePath());
-            } catch (IOException e) {
-                log.error("link file fail, will use copy, exception: ", e);
-                try {
-                    Files.copy(torrentContentFile.toPath(), importFile.toPath());
-                    log.debug("copy link file success, target: [{}], exists: [{}].",
-                        importFilePath, torrentContentFile.getAbsolutePath());
-                } catch (IOException ex) {
-                    throw new RuntimeException(ex);
-                }
-            }
-
-            fileOperate.create(new run.ikaros.api.core.file.File()
-                    .setName(fileName)
-                    .setCanRead(true)
+    private Mono<File> importFileByHardLinkRecursively(File torrentFile,
+                                                       Folder folder) {
+        return Mono.just(torrentFile)
+            .flatMap(torrentContentFile -> {
+                String fileName = torrentContentFile.getName();
+                String postfix = FileUtils.parseFilePostfix(fileName);
+                FileType fileType = FileUtils.parseTypeByPostfix(postfix);
+                run.ikaros.api.core.file.File dbFile = new run.ikaros.api.core.file.File();
+                dbFile.setName(fileName).setCanRead(true)
                     .setSize(torrentContentFile.length())
-                    .setFsPath(importFilePath)
-                    .setFolderId(folderId)
-                    .setMd5(md5Hash)
-                    .setUpdateTime(LocalDateTime.now())
-                    .setType(fileType)
-                    .setUrl(
-                        FileUtils.path2url(importFilePath, ikarosProperties.getWorkDir().toString())))
-                .subscribe(file -> log.info("import torrent file success for {}.",
-                    torrentContentFile.getName()));
-        } else {
-            String name = torrentContentFile.getName();
-            AtomicReference<Folder> folder = new AtomicReference<>();
-            folderOperate.findByParentIdAndName(folderId, name)
-                .switchIfEmpty(folderOperate.create(folderId, name))
-                .subscribe(folder::set);
-            while (Objects.isNull(folder.get())) {
-                try {
-                    Thread.sleep(10);
-                } catch (InterruptedException e) {
-                    throw new RuntimeException(e);
-                }
-            }
-            if (folder.get() == null) {
-                log.warn("folder is null for torrent folder: {}", torrentContentFile.getName());
-                return;
-            }
-            File[] files = torrentContentFile.listFiles();
-            if (Objects.isNull(files)) {
-                return;
-            }
-            for (File file : files) {
-                importFileByHardLinkRecursively(file, folder.get().getId());
-            }
-        }
-    }
+                    .setFolderId(folder.getId())
+                    .setType(fileType);
+                return fileOperate.findAllByNameLikeAndType(fileName, fileType)
+                    .collectList()
+                    .filter(List::isEmpty)
+                    .<String>handle((files, sink) -> {
+                        try {
+                            sink.next(FileUtils.calculateFileHash(
+                                FileUtils.convertToDataBufferFlux(torrentContentFile)));
+                        } catch (IOException e) {
+                            sink.error(new RuntimeException(e));
+                        }
+                    })
+                    .doOnError(throwable -> log.error("calculate file md5 fail.", throwable))
+                    .doOnNext(dbFile::setMd5)
+                    .flatMap(fileOperate::existsByMd5)
+                    .filter(exists -> !exists)
+                    .map(exists -> FileUtils.buildAppUploadFilePath(
+                        ikarosProperties.getWorkDir().toString(), postfix))
+                    .map(File::new)
+                    .flatMap(importFile -> {
+                        String importFilePath = importFile.getAbsolutePath();
+                        dbFile.setFsPath(importFilePath);
+                        dbFile.setUrl(
+                            FileUtils.path2url(importFilePath,
+                                ikarosProperties.getWorkDir().toString()));
+                        dbFile.setUpdateTime(LocalDateTime.now());
+                        try {
+                            Files.createLink(importFile.toPath(), torrentContentFile.toPath());
+                            log.debug("hard link file success, target: [{}], exists: [{}].",
+                                importFilePath, torrentContentFile.getAbsolutePath());
+                        } catch (IOException e) {
+                            log.error("link file fail, will use copy, exception: ", e);
+                            try {
+                                Files.copy(torrentContentFile.toPath(), importFile.toPath());
+                                log.debug("copy link file success, target: [{}], exists: [{}].",
+                                    importFilePath, torrentContentFile.getAbsolutePath());
+                            } catch (IOException ex) {
+                                return Mono.error(new RuntimeException(ex));
+                            }
+                        }
+                        return Mono.just(importFile);
+                    })
+                    .doOnError(throwable -> log.error("link torrent file fail.", throwable))
+                    .map(file -> dbFile)
+                    ;
 
-//    private void matchingSubjectEpisodeResource() {
-//        Set<String> bgmTvSubjectIds = bgmTvSubjectIdEpTitlesMap.keySet();
-//
-//    }
+            })
+            .flatMap(fileOperate::create)
+            .doOnNext(dbFile ->
+                log.info("import torrent file success for {}.",
+                    dbFile.getName()))
+
+            .then(Mono.just(torrentFile))
+            .filter(File::isDirectory)
+            .filter(file -> Objects.nonNull(file.listFiles()))
+            .flatMapMany(torrentContentFile -> {
+                String name = torrentContentFile.getName();
+                return folderOperate.findByParentIdAndName(folder.getId(), name)
+                    .switchIfEmpty(folderOperate.create(folder.getId(), name))
+                    .flatMapMany(folder1 -> Flux.fromStream(Arrays.stream(
+                            Objects.requireNonNull(torrentContentFile.listFiles())))
+                        .flatMap(file -> importFileByHardLinkRecursively(file, folder1)));
+            })
+            .then(Mono.just(torrentFile));
+    }
 
 
 }
