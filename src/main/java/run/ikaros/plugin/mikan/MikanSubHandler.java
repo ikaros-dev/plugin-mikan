@@ -97,13 +97,13 @@ public class MikanSubHandler {
                 log.info("starting parse mikan my subscribe rss url from mikan config map."))
             .flatMapMany(mc -> Flux.fromStream(mc.parseMikanMySubscribeRss().stream()))
             .doOnNext(mikanRssItem ->
-                log.info("start for each mikan rss item list for item title: {}",
+                log.debug("start for each mikan rss item list for item title: {}",
                     mikanRssItem.getTitle()))
             .flatMap(mikanRssItem -> {
                 String mikanRssItemTitle = mikanRssItem.getTitle();
                 qbittorrentClient.addTorrentFromUrl(mikanRssItem.getTorrentUrl(),
                     mikanRssItemTitle);
-                log.info("add to qbittorrent for torrent name: [{}] and torrent url: [{}].",
+                log.debug("add to qbittorrent for torrent name: [{}] and torrent url: [{}].",
                     mikanRssItemTitle, mikanRssItem.getTorrentUrl());
 
                 QbTorrentInfo qbTorrentInfo = qbittorrentClient.getTorrentList(QbTorrentInfoFilter.ALL,
@@ -142,9 +142,9 @@ public class MikanSubHandler {
     private Mono<Subject> matchingSingleFile(Subject subject, String fileName) {
         String postfix = FileUtils.parseFilePostfix(fileName);
         FileType fileType = FileUtils.parseTypeByPostfix(postfix);
-        log.debug("matching: subject: [{}]%n "
-                + "fileName: [{}] postfix: [{}] fileType: [{}]" ,
-            getSubjectName(subject), fileName, postfix, fileType);
+        // log.debug("matching: subject: [{}]%n "
+        //         + "fileName: [{}] postfix: [{}] fileType: [{}]" ,
+        //     getSubjectName(subject), fileName, postfix, fileType);
         return fileOperate.findAllByNameLikeAndType(fileName, fileType)
             .collectList()
             .filter(files -> !files.isEmpty())
@@ -165,7 +165,7 @@ public class MikanSubHandler {
                 qc.getCategory(), null, null, null, null).stream()))
             .filter(qbTorrentInfo -> qbTorrentInfo.getProgress() == 1.0)
             .doOnNext(qbTorrentInfo ->
-                log.info("start handle single torrent for content path: {}",
+                log.debug("start handle single torrent for content path: {}",
                     qbTorrentInfo.getContentPath()))
             .flatMap(qbTorrentInfo ->
                 folderOperate.findByParentIdAndName(DEFAULT_FOLDER_ROOT_ID,
