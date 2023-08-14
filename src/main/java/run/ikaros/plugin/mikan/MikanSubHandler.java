@@ -230,20 +230,7 @@ public class MikanSubHandler {
                     .setSize(torrentContentFile.length())
                     .setFolderId(folder.getId())
                     .setType(fileType);
-                return fileOperate.findAllByNameLikeAndType(fileName, fileType)
-                    .collectList()
-                    .filter(List::isEmpty)
-                    .<String>handle((files, sink) -> {
-                        try {
-                            sink.next(FileUtils.calculateFileHash(
-                                FileUtils.convertToDataBufferFlux(torrentContentFile)));
-                        } catch (IOException e) {
-                            sink.error(new RuntimeException(e));
-                        }
-                    })
-                    .doOnError(throwable -> log.error("calculate file md5 fail.", throwable))
-                    .doOnNext(dbFile::setMd5)
-                    .flatMap(fileOperate::existsByMd5)
+                return fileOperate.existsByFolderIdAndFileName(folder.getId(), fileName)
                     .filter(exists -> !exists)
                     .map(exists -> FileUtils.buildAppUploadFilePath(
                         ikarosProperties.getWorkDir().toString(), postfix))
