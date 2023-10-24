@@ -14,7 +14,7 @@ ext {
     springContext = '6.0.3'
     pf4j = '3.8.0'
     lombok = '1.18.24'
-    libFile = 'lib/api-0.6.1.jar'
+    libFile = 'lib/api-0.11.1.jar'
 }
 
 
@@ -26,7 +26,7 @@ dependencies {
     compileOnly "org.springframework:spring-webflux:6.0.3"
     compileOnly "org.springdoc:springdoc-openapi-starter-webflux-api:2.0.2"
     compileOnly 'org.springframework.retry:spring-retry:2.0.2'
-    compileOnly 'org.jsoup:jsoup:1.16.1'
+    implementation 'org.jsoup:jsoup:1.16.1'
 
     compileOnly files(libFile)
     testImplementation files(libFile)
