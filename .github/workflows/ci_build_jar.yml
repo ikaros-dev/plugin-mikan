@@ -30,9 +30,6 @@ jobs:
       - name: Clean with gradle
         run: |
           ./gradlew clean
-      - name: Build console with npm
-        run: |
-          ./gradlew buildFrontend -x test
       - name: Build server with gradle
         run: |
           ./gradlew build -x test
