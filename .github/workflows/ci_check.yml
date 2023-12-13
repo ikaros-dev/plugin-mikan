@@ -35,9 +35,6 @@ jobs:
           java-version: 17
       - name: Make gradlew executable
         run: chmod +x ./gradlew
-      - name: Build console with npm
-        run: |
-          ./gradlew buildFrontend -x test
   test:
     runs-on: ubuntu-latest
     steps:
