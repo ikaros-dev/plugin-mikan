@@ -58,10 +58,12 @@ class QbittorrentClientTest {
     //@Test
     void testGetTorrents() {
         QbConfig config = new QbConfig();
-        config.setQbUrlPrefix("http://localhost:50100/");
+        config.setQbUrlPrefix("http://192.168.9.10:8181");
+//        config.setQbUsername("admin");
+//        config.setQbPassword("adminadmin");
 
         QbittorrentClient qbittorrentClient = new QbittorrentClient(null);
-        qbittorrentClient.setBaseSavePath("C:\\Users\\li-guohao\\Videos\\tests");
+        qbittorrentClient.setBaseSavePath("C:\\Users\\chivehao\\Videos\\Tests");
         qbittorrentClient.setConfig(config);
 
         List<QbTorrentInfo> torrentList =
