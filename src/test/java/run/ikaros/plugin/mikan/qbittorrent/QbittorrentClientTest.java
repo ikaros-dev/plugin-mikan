@@ -55,10 +55,10 @@ class QbittorrentClientTest {
         System.out.println(qbittorrentClient.getApplicationVersion());
     }
 
-    //@Test
+    // @Test
     void testGetTorrents() {
         QbConfig config = new QbConfig();
-        config.setQbUrlPrefix("http://192.168.9.10:8181");
+        config.setQbUrlPrefix("http://localhost:8181");
 //        config.setQbUsername("admin");
 //        config.setQbPassword("adminadmin");
 
@@ -67,7 +67,7 @@ class QbittorrentClientTest {
         qbittorrentClient.setConfig(config);
 
         List<QbTorrentInfo> torrentList =
-            qbittorrentClient.getTorrentList(QbTorrentInfoFilter.ALL, null, null, null, null, null);
+            qbittorrentClient.getTorrentList(QbTorrentInfoFilter.ALL, DefaultConst.OPTION_QBITTORRENT_CATEGORY, null, null, null, null);
 
         Assertions.assertThat(torrentList).isNotNull();
         Assertions.assertThat(torrentList).isNotEmpty();

@@ -722,4 +722,53 @@ public class QbTorrentInfo {
         this.uploadSpeed = uploadSpeed;
         return this;
     }
+
+    @Override
+    public String toString() {
+        return "QbTorrentInfo{" +
+                "name='" + name + '\'' +
+                ", hash='" + hash + '\'' +
+                ", savePath='" + savePath + '\'' +
+                ", addedOn=" + addedOn +
+                ", amountLeft=" + amountLeft +
+                ", autoTmm=" + autoTmm +
+                ", availability=" + availability +
+                ", category='" + category + '\'' +
+                ", completed=" + completed +
+                ", completionOn=" + completionOn +
+                ", contentPath='" + contentPath + '\'' +
+                ", dlLimit=" + dlLimit +
+                ", dlspeed=" + dlspeed +
+                ", downloaded=" + downloaded +
+                ", downloadedSession=" + downloadedSession +
+                ", eta=" + eta +
+                ", firstLastPieceArePrioritized=" + firstLastPieceArePrioritized +
+                ", forceStart=" + forceStart +
+                ", lastActivity=" + lastActivity +
+                ", magnetUri='" + magnetUri + '\'' +
+                ", maxRatio=" + maxRatio +
+                ", maxSeedingTime=" + maxSeedingTime +
+                ", numComplete=" + numComplete +
+                ", numIncomplete=" + numIncomplete +
+                ", numLeechs=" + numLeechs +
+                ", numSeeds=" + numSeeds +
+                ", priority=" + priority +
+                ", progress=" + progress +
+                ", ratio=" + ratio +
+                ", seedingTime=" + seedingTime +
+                ", seenComplete=" + seenComplete +
+                ", seqDl=" + seqDl +
+                ", size=" + size +
+                ", state='" + state + '\'' +
+                ", superSeeding=" + superSeeding +
+                ", tags='" + tags + '\'' +
+                ", timeActive=" + timeActive +
+                ", totalSize=" + totalSize +
+                ", tracker='" + tracker + '\'' +
+                ", uploadLimit=" + uploadLimit +
+                ", uploaded=" + uploaded +
+                ", uploadedSession=" + uploadedSession +
+                ", uploadSpeed=" + uploadSpeed +
+                '}';
+    }
 }
