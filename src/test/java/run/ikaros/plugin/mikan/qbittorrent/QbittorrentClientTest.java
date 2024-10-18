@@ -10,6 +10,19 @@ import java.util.List;
 
 class QbittorrentClientTest {
 
+    @Test
+    void testGetCookieByPostLogin() {
+
+        QbConfig config = new QbConfig();
+        config.setQbUrlPrefix("http://192.168.9.10:8181");
+        config.setQbUsername("admin");
+        config.setQbPassword("adminadmin");
+
+        QbittorrentClient qbittorrentClient = new QbittorrentClient(null);
+        qbittorrentClient.setConfig(config);
+        qbittorrentClient.getCookieByPostLogin(config.getQbUsername(), config.getQbPassword());
+    }
+
     // @Test
     void testAddTorrentFromUrl() throws Exception {
         String name =

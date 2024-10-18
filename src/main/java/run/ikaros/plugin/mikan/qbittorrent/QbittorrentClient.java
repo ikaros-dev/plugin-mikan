@@ -11,7 +11,6 @@ import org.springframework.util.Assert;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
-import org.springframework.web.util.UriComponents;
 import org.springframework.web.util.UriComponentsBuilder;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
@@ -98,7 +97,7 @@ public class QbittorrentClient {
             && StringUtils.isNotBlank(config.getQbPassword())) {
             try {
                 List<String> cookies =
-                    getCookieByLogin(config.getQbUsername(), config.getQbPassword());
+                    getCookieByPostLogin(config.getQbUsername(), config.getQbPassword());
                 this.httpHeaders.clear();
                 this.httpHeaders.put(HttpHeaders.COOKIE, cookies);
             } catch (Exception exception) {
@@ -162,7 +161,7 @@ public class QbittorrentClient {
     }
 
     @Retryable
-    public List<String> getCookieByLogin(String username, String password) {
+    public List<String> getCookieByPostLogin(String username, String password) {
         if (StringUtils.isBlank(username)) {
             username = DefaultConst.OPTION_QBITTORRENT_USERNAME;
         }
@@ -170,13 +169,15 @@ public class QbittorrentClient {
             password = DefaultConst.OPTION_QBITTORRENT_PASSWORD;
         }
 
-        UriComponents uriComponents = UriComponentsBuilder.fromHttpUrl(getUrlPrefix() + API.AUTH)
-            .queryParam("username", username)
-            .queryParam("password", password)
-            .build();
+        MultiValueMap<String, Object> requestBody = new LinkedMultiValueMap<>();
+        requestBody.put("username", List.of(username));
+        requestBody.put("password", List.of(password));
+
+        HttpEntity<MultiValueMap<String, Object>> requestEntity = new HttpEntity<>(requestBody, httpHeaders);
+
 
         ResponseEntity<String> responseEntity =
-            restTemplate.getForEntity(uriComponents.toUriString(), String.class);
+            restTemplate.postForEntity(getUrlPrefix() + API.AUTH, requestEntity, String.class);
         if (responseEntity.getBody() != null && responseEntity.getBody().contains("Ok")) {
             HttpHeaders headers = responseEntity.getHeaders();
             List<String> cookies = headers.get("set-cookie");
