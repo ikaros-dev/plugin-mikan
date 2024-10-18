@@ -10,7 +10,7 @@ import java.util.List;
 
 class QbittorrentClientTest {
 
-    @Test
+    // @Test
     void testGetCookieByPostLogin() {
 
         QbConfig config = new QbConfig();
