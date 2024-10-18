@@ -71,15 +71,18 @@ class QbittorrentClientTest {
         Assertions.assertThat(torrentList).isNotEmpty();
     }
 
-    // @Test
+     //@Test
     void addSingleTags() {
         QbConfig config = new QbConfig();
-        config.setQbUrlPrefix("http://localhost:50100/");
+        config.setQbUrlPrefix("http://192.168.9.10:8181");
+        config.setQbUsername("admin");
+        config.setQbPassword("adminadmin");
 
         QbittorrentClient qbittorrentClient = new QbittorrentClient(null);
-        qbittorrentClient.setBaseSavePath("C:\\Users\\li-guohao\\Videos\\tests");
         qbittorrentClient.setConfig(config);
+        qbittorrentClient.getCookieByPostLogin(config.getQbUsername(), config.getQbPassword());
+        qbittorrentClient.setBaseSavePath("C:\\Users\\chivehao\\Videos\\Tests");
 
-        qbittorrentClient.addSingleTags("9006f599dd0730b41a46e4ab2e523824371127b5", "test");
+        qbittorrentClient.addSingleTags("a98ac1d535da3fd1e4995761e0d38af4ceffb8cc", "test");
     }
 }
