@@ -50,6 +50,6 @@ public class MikanPlugin extends BasePlugin {
 
     @Override
     public void delete() {
-        log.info("plugin [{}] delete success", NAME);
+        // log.info("plugin [{}] delete success", NAME);
     }
 }
