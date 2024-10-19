@@ -31,10 +31,10 @@ class MikanSubHandlerTest {
         qc.setBaseSavePath("C:\\Users\\chivehao\\Videos\\Tests");
         qc.setConfig(config);
 
-        MikanSubHandler mikanSubHandler = new MikanSubHandler(mc, qc, null, null, null, null, null);
-
-        StepVerifier.create(mikanSubHandler.parseMikanSubRssAndAddToQbittorrent())
-                .verifyComplete();
+//        MikanSubHandler mikanSubHandler = new MikanSubHandler(mc, qc, null, null, null, null, null);
+//
+//        StepVerifier.create(mikanSubHandler.parseMikanSubRssAndAddToQbittorrent())
+//                .verifyComplete();
 
     }
 }

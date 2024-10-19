@@ -14,9 +14,12 @@ import run.ikaros.api.core.attachment.AttachmentOperate;
 import run.ikaros.api.core.attachment.AttachmentReferenceOperate;
 import run.ikaros.api.core.subject.Subject;
 import run.ikaros.api.core.subject.SubjectOperate;
+import run.ikaros.api.core.subject.SubjectSync;
+import run.ikaros.api.core.subject.SubjectSyncPlatformOperate;
 import run.ikaros.api.core.tag.Tag;
 import run.ikaros.api.core.tag.TagOperate;
 import run.ikaros.api.infra.properties.IkarosProperties;
+import run.ikaros.api.infra.utils.AssertUtils;
 import run.ikaros.api.infra.utils.FileUtils;
 import run.ikaros.api.store.enums.*;
 import run.ikaros.plugin.mikan.qbittorrent.QbTorrentInfoFilter;
@@ -47,12 +50,14 @@ public class MikanSubHandler {
     private final AttachmentOperate attachmentOperate;
     private final AttachmentReferenceOperate attachmentReferenceOperate;
     private final TagOperate tagOperate;
+    private final SubjectSyncPlatformOperate syncPlatformOperate;
     private final IkarosProperties ikarosProperties;
     private RuntimeMode pluginRuntimeMode;
 
     public MikanSubHandler(MikanClient mikanClient, QbittorrentClient qbittorrentClient,
                            SubjectOperate subjectOperate, AttachmentOperate attachmentOperate,
-                           AttachmentReferenceOperate attachmentReferenceOperate, TagOperate tagOperate,
+                           AttachmentReferenceOperate attachmentReferenceOperate,
+                           TagOperate tagOperate, SubjectSyncPlatformOperate syncPlatformOperate,
                            IkarosProperties ikarosProperties) {
         this.mikanClient = mikanClient;
         this.qbittorrentClient = qbittorrentClient;
@@ -60,6 +65,7 @@ public class MikanSubHandler {
         this.attachmentOperate = attachmentOperate;
         this.attachmentReferenceOperate = attachmentReferenceOperate;
         this.tagOperate = tagOperate;
+        this.syncPlatformOperate = syncPlatformOperate;
         this.ikarosProperties = ikarosProperties;
     }
 
@@ -157,8 +163,7 @@ public class MikanSubHandler {
                             log.debug("add tag for torrent: {}", mikanRssItemTitle);
                         }
                     }
-                    return subjectOperate.syncByPlatform(null, SubjectSyncPlatform.BGM_TV,
-                            bgmTvSubjectId);
+                    return syncSubject(bgmTvSubjectId);
                 })
                 .flatMap(this::saveSubjectFromTag)
                 .doOnError(throwable -> log.error("parse mikan sub rss item fail.", throwable))
@@ -193,13 +198,22 @@ public class MikanSubHandler {
     private synchronized Mono<Subject> saveSubjectFromTag(Subject subject) {
         final String tagName = "from:" + MikanPlugin.NAME;
         return tagOperate.create(Tag.builder()
-                .createTime(LocalDateTime.now())
-                .type(TagType.SUBJECT)
-                .masterId(subject.getId())
-                .name(tagName)
-                .userId(-1L)
-                .build())
+                        .createTime(LocalDateTime.now())
+                        .type(TagType.SUBJECT)
+                        .masterId(subject.getId())
+                        .name(tagName)
+                        .userId(-1L)
+                        .build())
                 .map(tag -> subject);
+    }
+
+    private synchronized Mono<Subject> syncSubject(String bgmTvSubjectId) {
+        AssertUtils.notBlank(bgmTvSubjectId, "'bgmTvSubjectId' must not be blank.");
+        return syncPlatformOperate.findSubjectSyncBySubjectIdAndPlatform(
+                        Long.parseLong(bgmTvSubjectId), SubjectSyncPlatform.BGM_TV)
+                .map(SubjectSync::getSubjectId)
+                .flatMap(subjectOperate::findById)
+                .switchIfEmpty(subjectOperate.syncByPlatform(null, SubjectSyncPlatform.BGM_TV, bgmTvSubjectId));
     }
 
     public Mono<Void> importQbittorrentFilesAndAddSubject() {
@@ -221,8 +235,7 @@ public class MikanSubHandler {
                 .flatMap(torrentInfo -> Mono.just(
                                 torrentInfo.getTags())
                         .filter(StringUtils::hasText)
-                        .flatMap(bgmTvSubjectId -> subjectOperate.syncByPlatform(null,
-                                        SubjectSyncPlatform.BGM_TV, bgmTvSubjectId)
+                        .flatMap(bgmTvSubjectId -> syncSubject(bgmTvSubjectId)
                                 .flatMap(this::saveSubjectFromTag)
                                 .flatMap(subject -> {
                                     String contentPath = torrentInfo.getContentPath();
