@@ -14,12 +14,11 @@ import run.ikaros.api.core.attachment.AttachmentOperate;
 import run.ikaros.api.core.attachment.AttachmentReferenceOperate;
 import run.ikaros.api.core.subject.Subject;
 import run.ikaros.api.core.subject.SubjectOperate;
+import run.ikaros.api.core.tag.Tag;
+import run.ikaros.api.core.tag.TagOperate;
 import run.ikaros.api.infra.properties.IkarosProperties;
 import run.ikaros.api.infra.utils.FileUtils;
-import run.ikaros.api.store.enums.AttachmentReferenceType;
-import run.ikaros.api.store.enums.AttachmentType;
-import run.ikaros.api.store.enums.FileType;
-import run.ikaros.api.store.enums.SubjectSyncPlatform;
+import run.ikaros.api.store.enums.*;
 import run.ikaros.plugin.mikan.qbittorrent.QbTorrentInfoFilter;
 import run.ikaros.plugin.mikan.qbittorrent.QbittorrentClient;
 import run.ikaros.plugin.mikan.qbittorrent.model.QbTorrentInfo;
@@ -47,18 +46,20 @@ public class MikanSubHandler {
     private final SubjectOperate subjectOperate;
     private final AttachmentOperate attachmentOperate;
     private final AttachmentReferenceOperate attachmentReferenceOperate;
+    private final TagOperate tagOperate;
     private final IkarosProperties ikarosProperties;
     private RuntimeMode pluginRuntimeMode;
 
     public MikanSubHandler(MikanClient mikanClient, QbittorrentClient qbittorrentClient,
                            SubjectOperate subjectOperate, AttachmentOperate attachmentOperate,
-                           AttachmentReferenceOperate attachmentReferenceOperate,
+                           AttachmentReferenceOperate attachmentReferenceOperate, TagOperate tagOperate,
                            IkarosProperties ikarosProperties) {
         this.mikanClient = mikanClient;
         this.qbittorrentClient = qbittorrentClient;
         this.subjectOperate = subjectOperate;
         this.attachmentOperate = attachmentOperate;
         this.attachmentReferenceOperate = attachmentReferenceOperate;
+        this.tagOperate = tagOperate;
         this.ikarosProperties = ikarosProperties;
     }
 
@@ -177,9 +178,16 @@ public class MikanSubHandler {
         return attachmentOperate.findByTypeAndParentIdAndName(AttachmentType.File, parentId,
                         fileName)
                 .map(Attachment::getId)
-                .flatMap(attId -> attachmentReferenceOperate
+                .flatMap(attId -> tagOperate.create(Tag.builder()
+                        .createTime(LocalDateTime.now())
+                        .type(TagType.ATTACHMENT)
+                        .masterId(attId)
+                        .name("subject:" + subject.getId())
+                        .userId(-1L)
+                        .build()))
+                .flatMap(tag -> attachmentReferenceOperate
                         .matchingAttachmentsAndSubjectEpisodes(
-                                subject.getId(), new Long[]{attId}, true))
+                                subject.getId(), new Long[]{tag.getMasterId()}, true))
                 .then(Mono.just(subject));
     }
 
