@@ -1,5 +1,6 @@
 package run.ikaros.plugin.mikan;
 
+import lombok.extern.slf4j.Slf4j;
 import org.pf4j.RuntimeMode;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
@@ -9,35 +10,33 @@ import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 import run.ikaros.api.constant.AppConst;
 import run.ikaros.api.core.attachment.Attachment;
-import run.ikaros.api.core.attachment.AttachmentConst;
 import run.ikaros.api.core.attachment.AttachmentOperate;
 import run.ikaros.api.core.attachment.AttachmentReferenceOperate;
 import run.ikaros.api.core.subject.Subject;
 import run.ikaros.api.core.subject.SubjectOperate;
 import run.ikaros.api.core.subject.SubjectSync;
-import run.ikaros.api.core.subject.SubjectSyncPlatformOperate;
+import run.ikaros.api.core.subject.SubjectSyncOperate;
 import run.ikaros.api.core.tag.Tag;
 import run.ikaros.api.core.tag.TagOperate;
 import run.ikaros.api.infra.properties.IkarosProperties;
 import run.ikaros.api.infra.utils.AssertUtils;
 import run.ikaros.api.infra.utils.FileUtils;
-import run.ikaros.api.store.enums.*;
+import run.ikaros.api.store.enums.AttachmentType;
+import run.ikaros.api.store.enums.SubjectSyncPlatform;
+import run.ikaros.api.store.enums.TagType;
 import run.ikaros.plugin.mikan.qbittorrent.QbTorrentInfoFilter;
 import run.ikaros.plugin.mikan.qbittorrent.QbittorrentClient;
 import run.ikaros.plugin.mikan.qbittorrent.model.QbTorrentInfo;
+import run.ikaros.plugin.mikan.utils.StringMatchingUtils;
 
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.time.Duration;
 import java.time.LocalDateTime;
-import java.util.*;
+import java.util.Arrays;
+import java.util.Objects;
 
-import lombok.extern.slf4j.Slf4j;
-import run.ikaros.plugin.mikan.utils.StringMatchingUtils;
-
-import static run.ikaros.api.constant.FileConst.DEFAULT_FOLDER_ROOT_ID;
 import static run.ikaros.api.core.attachment.AttachmentConst.DOWNLOAD_DIRECTORY_ID;
 
 @Slf4j
@@ -50,14 +49,14 @@ public class MikanSubHandler {
     private final AttachmentOperate attachmentOperate;
     private final AttachmentReferenceOperate attachmentReferenceOperate;
     private final TagOperate tagOperate;
-    private final SubjectSyncPlatformOperate syncPlatformOperate;
+    private final SubjectSyncOperate subjectSyncOperate;
     private final IkarosProperties ikarosProperties;
     private RuntimeMode pluginRuntimeMode;
 
     public MikanSubHandler(MikanClient mikanClient, QbittorrentClient qbittorrentClient,
                            SubjectOperate subjectOperate, AttachmentOperate attachmentOperate,
                            AttachmentReferenceOperate attachmentReferenceOperate,
-                           TagOperate tagOperate, SubjectSyncPlatformOperate syncPlatformOperate,
+                           TagOperate tagOperate, SubjectSyncOperate subjectSyncOperate,
                            IkarosProperties ikarosProperties) {
         this.mikanClient = mikanClient;
         this.qbittorrentClient = qbittorrentClient;
@@ -65,7 +64,7 @@ public class MikanSubHandler {
         this.attachmentOperate = attachmentOperate;
         this.attachmentReferenceOperate = attachmentReferenceOperate;
         this.tagOperate = tagOperate;
-        this.syncPlatformOperate = syncPlatformOperate;
+        this.subjectSyncOperate = subjectSyncOperate;
         this.ikarosProperties = ikarosProperties;
     }
 
@@ -89,7 +88,7 @@ public class MikanSubHandler {
         return Flux.interval(Duration.ofMinutes(Objects.nonNull(pluginRuntimeMode) &&
                         RuntimeMode.DEVELOPMENT.equals(pluginRuntimeMode) ? 3 : 30))
                 .flatMap(tick -> parseMikanSubRssAndAddToQbittorrent())
-                .subscribeOn(Schedulers.newSingle("ParseMikanSubRssAndAddToQbittorrent", true))
+//                .subscribeOn(Schedulers.newSingle("ParseMikanSubRssAndAddToQbittorrent", true))
                 .subscribe();
     }
 
@@ -208,8 +207,11 @@ public class MikanSubHandler {
 
     private Mono<Subject> getSubjectWithBgmTvId(String bgmTvSubjectId) {
         AssertUtils.notBlank(bgmTvSubjectId, "'bgmTvSubjectId' must not be blank.");
-        return syncPlatformOperate.findSubjectSyncBySubjectIdAndPlatform(
-                        Long.parseLong(bgmTvSubjectId), SubjectSyncPlatform.BGM_TV)
+        return subjectSyncOperate.findSubjectSyncsByPlatformAndPlatformId(
+                        SubjectSyncPlatform.BGM_TV, bgmTvSubjectId)
+                .collectList()
+                .filter(subjectSyncs -> !subjectSyncs.isEmpty())
+                .map(subjectSyncs -> subjectSyncs.get(0))
                 .map(SubjectSync::getSubjectId)
                 .flatMap(subjectOperate::findById);
     }
@@ -217,7 +219,8 @@ public class MikanSubHandler {
     private synchronized Mono<Subject> syncSubject(String bgmTvSubjectId) {
         AssertUtils.notBlank(bgmTvSubjectId, "'bgmTvSubjectId' must not be blank.");
         return getSubjectWithBgmTvId(bgmTvSubjectId)
-                .switchIfEmpty(subjectOperate.syncByPlatform(null, SubjectSyncPlatform.BGM_TV, bgmTvSubjectId))
+                .switchIfEmpty(subjectOperate.syncByPlatform(null, SubjectSyncPlatform.BGM_TV, bgmTvSubjectId)
+                        .then(getSubjectWithBgmTvId(bgmTvSubjectId)))
                 .flatMap(this::saveSubjectFromTag);
     }
 
