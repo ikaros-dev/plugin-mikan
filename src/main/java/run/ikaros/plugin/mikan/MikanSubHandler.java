@@ -137,7 +137,7 @@ public class MikanSubHandler {
                         }
                     }
                     long end = System.currentTimeMillis();
-                    log.debug("qbittorrentClient.getTorrentList {}ms", end - start);
+                    // log.debug("qbittorrentClient.getTorrentList {}ms", end - start);
 
                     String bgmTvSubjectId = qbTorrentInfo.getTags();
                     if (!StringUtils.hasText(bgmTvSubjectId)) {
@@ -152,8 +152,7 @@ public class MikanSubHandler {
                         }
                         int index = bgmTvSubjectPageUrl.lastIndexOf("/");
                         bgmTvSubjectId = bgmTvSubjectPageUrl.substring(index + 1);
-                        log.debug("bgmTvSubjectId and qbTorrentInfo" +
-                                "bgmTvSubjectId: {} \nqbTorrentInfo: {}", bgmTvSubjectId, qbTorrentInfo);
+                        // log.debug("bgmTvSubjectId and qbTorrentInfo" + "bgmTvSubjectId: {} \nqbTorrentInfo: {}", bgmTvSubjectId, qbTorrentInfo);
                         if (StringUtils.hasText(qbTorrentInfo.getHash())) {
                             qbittorrentClient.addSingleTags(qbTorrentInfo.getHash(), bgmTvSubjectId);
                             log.debug("add tag for torrent: {}", mikanRssItemTitle);
