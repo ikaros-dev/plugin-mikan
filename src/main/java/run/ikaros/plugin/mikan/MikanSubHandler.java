@@ -165,7 +165,6 @@ public class MikanSubHandler {
                     }
                     return syncSubject(bgmTvSubjectId);
                 })
-                .flatMap(this::saveSubjectFromTag)
                 .doOnError(throwable -> log.error("parse mikan sub rss item fail.", throwable))
                 .doOnComplete(() -> {
                     // 如果新添加的种子文件状态是缺失文件，则需要再恢复下
@@ -207,13 +206,19 @@ public class MikanSubHandler {
                 .map(tag -> subject);
     }
 
-    private synchronized Mono<Subject> syncSubject(String bgmTvSubjectId) {
+    private Mono<Subject> getSubjectWithBgmTvId(String bgmTvSubjectId) {
         AssertUtils.notBlank(bgmTvSubjectId, "'bgmTvSubjectId' must not be blank.");
         return syncPlatformOperate.findSubjectSyncBySubjectIdAndPlatform(
                         Long.parseLong(bgmTvSubjectId), SubjectSyncPlatform.BGM_TV)
                 .map(SubjectSync::getSubjectId)
-                .flatMap(subjectOperate::findById)
-                .switchIfEmpty(subjectOperate.syncByPlatform(null, SubjectSyncPlatform.BGM_TV, bgmTvSubjectId));
+                .flatMap(subjectOperate::findById);
+    }
+
+    private synchronized Mono<Subject> syncSubject(String bgmTvSubjectId) {
+        AssertUtils.notBlank(bgmTvSubjectId, "'bgmTvSubjectId' must not be blank.");
+        return getSubjectWithBgmTvId(bgmTvSubjectId)
+                .switchIfEmpty(subjectOperate.syncByPlatform(null, SubjectSyncPlatform.BGM_TV, bgmTvSubjectId))
+                .flatMap(this::saveSubjectFromTag);
     }
 
     public Mono<Void> importQbittorrentFilesAndAddSubject() {
@@ -235,8 +240,7 @@ public class MikanSubHandler {
                 .flatMap(torrentInfo -> Mono.just(
                                 torrentInfo.getTags())
                         .filter(StringUtils::hasText)
-                        .flatMap(bgmTvSubjectId -> syncSubject(bgmTvSubjectId)
-                                .flatMap(this::saveSubjectFromTag)
+                        .flatMap(bgmTvSubjectId -> getSubjectWithBgmTvId(bgmTvSubjectId)
                                 .flatMap(subject -> {
                                     String contentPath = torrentInfo.getContentPath();
                                     File torrentFile = new File(contentPath);
