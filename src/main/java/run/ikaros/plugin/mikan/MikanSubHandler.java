@@ -104,7 +104,6 @@ public class MikanSubHandler {
                 .doOnNext(mikanRssItem ->
                         log.debug("start for each mikan rss item list for item title: {}",
                                 mikanRssItem.getTitle()))
-                .parallel()
                 .flatMap(mikanRssItem -> {
                     String mikanRssItemTitle = mikanRssItem.getTitle();
                     qbittorrentClient.addTorrentFromUrl(mikanRssItem.getTorrentUrl(),
@@ -161,6 +160,7 @@ public class MikanSubHandler {
                     return subjectOperate.syncByPlatform(null, SubjectSyncPlatform.BGM_TV,
                             bgmTvSubjectId);
                 })
+                .flatMap(this::saveSubjectFromTag)
                 .doOnError(throwable -> log.error("parse mikan sub rss item fail.", throwable))
                 .doOnComplete(() -> {
                     // 如果新添加的种子文件状态是缺失文件，则需要再恢复下
@@ -190,6 +190,18 @@ public class MikanSubHandler {
                 .then(Mono.just(subject));
     }
 
+    private synchronized Mono<Subject> saveSubjectFromTag(Subject subject) {
+        final String tagName = "from:" + MikanPlugin.NAME;
+        return tagOperate.create(Tag.builder()
+                .createTime(LocalDateTime.now())
+                .type(TagType.SUBJECT)
+                .masterId(subject.getId())
+                .name(tagName)
+                .userId(-1L)
+                .build())
+                .map(tag -> subject);
+    }
+
     public Mono<Void> importQbittorrentFilesAndAddSubject() {
         return Mono.just(qbittorrentClient)
                 .doOnNext(qc ->
@@ -211,6 +223,7 @@ public class MikanSubHandler {
                         .filter(StringUtils::hasText)
                         .flatMap(bgmTvSubjectId -> subjectOperate.syncByPlatform(null,
                                         SubjectSyncPlatform.BGM_TV, bgmTvSubjectId)
+                                .flatMap(this::saveSubjectFromTag)
                                 .flatMap(subject -> {
                                     String contentPath = torrentInfo.getContentPath();
                                     File torrentFile = new File(contentPath);
