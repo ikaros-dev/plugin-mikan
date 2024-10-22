@@ -231,9 +231,9 @@ public class MikanSubHandler {
                 .flatMapMany(qc -> Flux.fromStream(qc.getTorrentList(QbTorrentInfoFilter.ALL,
                         qc.getCategory(), null, null, null, null).stream()))
                 .filter(qbTorrentInfo -> qbTorrentInfo.getProgress() == 1.0)
-                .doOnNext(qbTorrentInfo ->
-                        log.debug("start handle single torrent for content path: {}",
-                                qbTorrentInfo.getContentPath()))
+//                .doOnNext(qbTorrentInfo ->
+//                        log.debug("start handle single torrent for content path: {}",
+//                                qbTorrentInfo.getContentPath()))
                 .flatMap(qbTorrentInfo ->
                         importFileByHardLinkRecursively(qbTorrentInfo.getContentPath(),
                                 DOWNLOAD_DIRECTORY_ID)
